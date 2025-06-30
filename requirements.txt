@@ -1,0 +1,6 @@
+vanna
+pymilvus
+sentence-transformers
+pandas
+python-dotenv
+streamlit 

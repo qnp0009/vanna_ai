@@ -1,0 +1,6 @@
+id,date,product,quantity,revenue
+1,2025-01-05,Laptop,2,2000.0
+2,2025-01-12,Smartphone,5,2500.0
+3,2025-02-10,Tablet,3,900.0
+4,2025-02-18,Smartwatch,4,800.0
+5,2025-03-01,Headphones,6,600.0
