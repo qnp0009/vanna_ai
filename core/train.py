@@ -2,45 +2,54 @@ from core.my_agent import MyVanna
 from config.config import vn
 vn.connect_to_sqlite("db/DIEM.db")
 
-# 1. Lấy DDL từ DB SQLite (tự động)
+# 1. Get DDL from SQLite DB (automatic)
+print("\n=== Getting DDL statements ===")
 df_ddl = vn.run_sql("SELECT type, sql FROM sqlite_master WHERE sql IS NOT NULL")
+print("DDL statements found:", len(df_ddl))
+for idx, row in df_ddl.iterrows():
+    print(f"Type: {row['type']}, SQL: {row['sql'][:100]}...")
+# 1. Training from DDL
 for ddl in df_ddl['sql'].to_list():
     vn.train(ddl=ddl)
 
-# 2. Huấn luyện với câu hỏi mẫu + SQL (có thêm Số BD khi liệt kê)
-vn.train(question="Danh sách tất cả học sinh và điểm của họ", sql="SELECT `Số BD`, `Điểm` FROM DIEM")
-vn.train(question="Ai có điểm cao nhất?", sql="SELECT `Số BD`, `Điểm` FROM DIEM ORDER BY `Điểm` DESC LIMIT 1")
-vn.train(question="Có bao nhiêu học sinh?", sql="SELECT COUNT(*) FROM DIEM")
-vn.train(question="Trung bình điểm là bao nhiêu?", sql="SELECT AVG(`Điểm`) FROM DIEM")
-vn.train(question="Những học sinh nào có điểm dưới 5?", sql="SELECT `Số BD`, `Điểm` FROM DIEM WHERE `Điểm` < 5")
-vn.train(question="Thống kê số học sinh theo từng phòng thi", sql="SELECT `Phòng thi`, COUNT(*) as `Số học sinh` FROM DIEM GROUP BY `Phòng thi`")
-vn.train(question="Số học sinh thi tại mỗi địa điểm", sql="SELECT `Địa điểm thi`, COUNT(*) FROM DIEM GROUP BY `Địa điểm thi`")
-vn.train(question="Tổng số câu đúng trung bình của học sinh", sql="SELECT AVG(`ĐÚNG`) FROM DIEM")
-vn.train(question="Liệt kê học sinh sai trên 20 câu", sql="SELECT `Số BD`, `SAI` FROM DIEM WHERE `SAI` > 20")
-vn.train(question="Danh sách học sinh cùng mã đề 209", sql="SELECT `Số BD`, `Mã đề` FROM DIEM WHERE `Mã đề` = 209")
+# 2. Training from sample Q&A in English using actual column names
+vn.train(question="List all students and their grades", sql="SELECT `ID`, `Grade` FROM DIEM")
+vn.train(question="Who has the highest grade?", sql="SELECT `ID`, `Grade` FROM DIEM ORDER BY `Grade` DESC LIMIT 1")
+vn.train(question="How many students are there?", sql="SELECT COUNT(*) FROM DIEM")
+vn.train(question="What is the average grade?", sql="SELECT AVG(`Grade`) FROM DIEM")
+vn.train(question="Which students scored below 5?", sql="SELECT `ID`, `Grade` FROM DIEM WHERE `Grade` < 5")
+vn.train(question="Number of students per exam room", sql="SELECT `Room`, COUNT(*) as `Number of Students` FROM DIEM GROUP BY `Room`")
+vn.train(question="Number of students per location", sql="SELECT `Location`, COUNT(*) FROM DIEM GROUP BY `Location`")
+vn.train(question="Average number of correct answers", sql="SELECT AVG(`Correct`) FROM DIEM")
+vn.train(question="List students who got more than 20 wrong answers", sql="SELECT `ID`, `Wrong` FROM DIEM WHERE `Wrong` > 20")
+vn.train(question="List students who took exam with ID_EXAM 209", sql="SELECT `ID`, `ID_EXAM` FROM DIEM WHERE `ID_EXAM` = 209")
 
 
-
-# 3. Thêm giải thích (doc)
+# 3. Add documentation (doc)
 vn.train(documentation="""
-Bảng DIEM lưu trữ thông tin kết quả thi của học sinh, với các cột:
-- Họ và tên: Tên học sinh
-- Ngày sinh: Ngày sinh của học sinh
-- Phòng thi: Số phòng thi
-- Địa điểm thi: Nơi học sinh thi
-- Số BD: Số báo danh
-- Mã đề: Mã đề thi
-- Điểm: Số điểm đạt được
-- Ghi chú: Các ghi chú thêm (nếu có)
-- ĐÚNG: Số câu đúng
-- SAI: Số câu sai
-- M HS: Mã học sinh (nội bộ)
+The DIEM table stores exam results of students with the following columns:
+- Full Name: Name of the student
+- Date of Birth: Student's birth date
+- Room: Exam room number
+- Location: Exam center location
+- ID: Student's unique exam number
+- ID_EXAM: Exam paper code
+- Grade: Final exam score
+- Note: Additional notes
+- Correct: Number of correct answers
+- Wrong: Number of wrong answers
+- M HS: Internal student code
 
-Các câu hỏi thường liên quan đến thống kê điểm, phân tích kết quả theo phòng thi hoặc địa điểm, và tìm học sinh có điểm cao/thấp.
+Typical queries involve analyzing grades, listing top/bottom students, or aggregating data by room or location.
 """)
 
 
-# 4. Kiểm tra dữ liệu huấn luyện
-df = vn.get_training_data()
-print(df)
+# 4. Check training data
+print("\n=== Training data summary ===")
+print("Training data in memory:", len(vn.training_data))
+print("Training data content:", vn.training_data[:3] if vn.training_data else "Empty")
 
+df = vn.get_training_data()
+print("get_training_data result:", df)
+
+vn.save_training_data()

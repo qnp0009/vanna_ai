@@ -74,16 +74,54 @@ class MilvusVectorDB(VannaBase):
             limit=3,  # Lấy top 3 kết quả
             output_fields=["text"]
         )
-        return [hit.entity.get("text") for hit in results[0]]
+        return [hit.entity.value_of_field("text") for hit in results[0]]
 
     def generate_embedding(self, text: str) -> list:
         return self._embed(text)
 
-    def get_training_data(self, **kwargs) -> pd.DataFrame:
-        self.collection.load()
-        results = self.collection.query(expr="id != ''", output_fields=["id", "text"])
-        return pd.DataFrame(results)
+    def get_training_data(self) -> pd.DataFrame:
+        """Lấy tất cả training data từ vector database"""
+        try:
+            # Lấy tất cả dữ liệu từ collection
+            results = self.collection.query(
+                expr="id != ''",  # Lấy tất cả records
+                output_fields=["id", "text"]
+            )
+            
+            if results:
+                # Chuyển đổi thành DataFrame
+                data = []
+                for result in results:
+                    text = result.get('text', '')
+                    # Phân tích text để tách question và sql nếu có
+                    if ' => ' in text:
+                        question, sql = text.split(' => ', 1)
+                        data.append({
+                            'id': result.get('id', ''),
+                            'question': question,
+                            'sql': sql,
+                            'type': 'question_sql'
+                        })
+                    else:
+                        data.append({
+                            'id': result.get('id', ''),
+                            'text': text,
+                            'type': 'documentation'
+                        })
+                
+                return pd.DataFrame(data)
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"Error getting training data from Milvus: {e}")
+            return pd.DataFrame()
 
-    def remove_training_data(self, id: str, **kwargs) -> bool:
-        self.collection.delete(expr=f"id == \"{id}\"")
-        return True
+    def remove_training_data(self, id: str) -> bool:
+        """Xóa training data theo ID"""
+        try:
+            self.collection.delete(f"id == '{id}'")
+            return True
+        except Exception as e:
+            print(f"Error removing training data: {e}")
+            return False

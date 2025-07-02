@@ -1,0 +1,42 @@
+[
+  {
+    "question": "List all students and their grades",
+    "sql": "SELECT `ID`, `Grade` FROM DIEM"
+  },
+  {
+    "question": "Who has the highest grade?",
+    "sql": "SELECT `ID`, `Grade` FROM DIEM ORDER BY `Grade` DESC LIMIT 1"
+  },
+  {
+    "question": "How many students are there?",
+    "sql": "SELECT COUNT(*) FROM DIEM"
+  },
+  {
+    "question": "What is the average grade?",
+    "sql": "SELECT AVG(`Grade`) FROM DIEM"
+  },
+  {
+    "question": "Which students scored below 5?",
+    "sql": "SELECT `ID`, `Grade` FROM DIEM WHERE `Grade` < 5"
+  },
+  {
+    "question": "Number of students per exam room",
+    "sql": "SELECT `Room`, COUNT(*) as `Number of Students` FROM DIEM GROUP BY `Room`"
+  },
+  {
+    "question": "Number of students per location",
+    "sql": "SELECT `Location`, COUNT(*) FROM DIEM GROUP BY `Location`"
+  },
+  {
+    "question": "Average number of correct answers",
+    "sql": "SELECT AVG(`Correct`) FROM DIEM"
+  },
+  {
+    "question": "List students who got more than 20 wrong answers",
+    "sql": "SELECT `ID`, `Wrong` FROM DIEM WHERE `Wrong` > 20"
+  },
+  {
+    "question": "List students who took exam with ID_EXAM 209",
+    "sql": "SELECT `ID`, `ID_EXAM` FROM DIEM WHERE `ID_EXAM` = 209"
+  }
+]
