@@ -29,7 +29,7 @@ vn.train(question="List students who took exam with ID_EXAM 209", sql="SELECT `I
 vn.train(documentation="""
 The DIEM table stores exam results of students with the following columns:
 - Full Name: Name of the student
-- Date of Birth: Student's birth date
+- Date: Date of the exam
 - Room: Exam room number
 - Location: Exam center location
 - ID: Student's unique exam number
