@@ -4,8 +4,10 @@ import sqlite3
 import pandas as pd
 from vanna.base import VannaBase
 from core.milvus_store import MilvusVectorDB
+from core.db_adapter import DatabaseAdapter
 import json
 import re
+from urllib.parse import urlparse
 
 class MyVanna(MilvusVectorDB, VannaBase):
     def __init__(self, config):
@@ -22,26 +24,51 @@ class MyVanna(MilvusVectorDB, VannaBase):
         self.api_key = config["api_key"]
         self.model = config["model"]
 
-        self.db_path = None
+        # Initialize database adapter
+        self.db_adapter = DatabaseAdapter()
+        self.connection_string = None
+        self.db_name = None
         self.run_sql_is_set = True
+        self.training_data = []
+
+    def get_db_name(self, connection_string):
+        if connection_string.startswith("sqlite:///"):
+            file_path = connection_string.replace("sqlite:///", "")
+            base = os.path.basename(file_path)
+            return os.path.splitext(base)[0]
+        elif connection_string.startswith("postgresql://"):
+            parsed = urlparse(connection_string)
+            return parsed.path[1:] if parsed.path.startswith("/") else parsed.path
+        else:
+            return "default"
+
+    def connect_to_database(self, connection_string: str):
+        """
+        Connect to database using connection string.
+        
+        Args:
+            connection_string: 
+                - SQLite: "sqlite:///path/to/file.db" or "sqlite:///C:/path/to/file.db"
+                - PostgreSQL: "postgresql://user:password@host:port/database"
+        """
+        self.connection_string = connection_string
+        self.db_adapter.connect(connection_string)
+        self.db_name = self.get_db_name(connection_string)
+        self.load_training_data()  # Always load per-DB training data
+        self.schema_context = self.extract_schema_context()  # Extract schema for LLM
+        print(f"✅ Connected to database: {connection_string}")
 
     def connect_to_sqlite(self, db_path):
-        """Store path to SQLite DB"""
-        self.db_path = db_path
-        print(f"✅ Connected to SQLite database: {db_path}")
+        """Legacy method for backward compatibility"""
+        connection_string = f"sqlite:///{db_path}"
+        self.connect_to_database(connection_string)
 
     def run_sql(self, sql: str) -> pd.DataFrame:
-        """Open a new connection per-thread to execute SQL safely"""
-        if self.db_path is None:
-            raise ValueError("Database path not set. Call connect_to_sqlite() first.")
+        """Execute SQL query using the database adapter"""
+        if not self.db_adapter.connection:
+            raise ValueError("Database not connected. Call connect_to_database() first.")
 
-        try:
-            with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
-                df = pd.read_sql_query(sql, conn)
-                return df
-        except Exception as e:
-            print(f"Error executing SQL: {e}")
-            return pd.DataFrame()
+        return self.db_adapter.execute_query(sql)
 
     def extract_sql_from_response(self, response: str) -> str:
         response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
@@ -58,7 +85,33 @@ class MyVanna(MilvusVectorDB, VannaBase):
                 return line
         return response.strip()
 
+    def extract_schema_context(self):
+        """
+        Extract schema (table and columns) from the connected DB and return as a string for LLM context.
+        """
+        if not self.db_adapter.connection:
+            return ""
+        try:
+            tables = self.db_adapter.get_tables()
+            schema_lines = []
+            for table in tables:
+                df_schema = self.db_adapter.get_table_schema(table)
+                if not df_schema.empty:
+                    if self.db_adapter.db_type == "sqlite":
+                        # SQLite PRAGMA table_info
+                        columns = [f"{row['name']} {row['type']}" for _, row in df_schema.iterrows()]
+                    else:
+                        # PostgreSQL info
+                        columns = [f"{row['column_name']} {row['data_type']}" for _, row in df_schema.iterrows()]
+                    schema_lines.append(f"Table {table}:\n  " + ", ".join(columns))
+            return "\n".join(schema_lines)
+        except Exception as e:
+            print(f"Error extracting schema context: {e}")
+            return ""
+
     def generate_sql(self, question: str, **kwargs) -> str:
+        # Always use schema context for LLM
+        schema_context = self.schema_context if hasattr(self, 'schema_context') else ""
         training_context = ""
         for item in self.training_data:
             if "question" in item and "sql" in item:
@@ -70,7 +123,7 @@ class MyVanna(MilvusVectorDB, VannaBase):
 
         prompt = [
             self.system_message("You are an assistant that generates SQL from natural language questions."),
-            self.user_message(f"Use the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}")
+            self.user_message(f"Database schema:\n{schema_context}\n\nUse the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}")
         ]
         sql_raw = self.submit_prompt(prompt)
         sql_clean = self.extract_sql_from_response(sql_raw)
@@ -83,7 +136,7 @@ class MyVanna(MilvusVectorDB, VannaBase):
             if sql.startswith("Error:") or sql.startswith("HTTP Error:") or sql.startswith("Connection Error:") or sql.startswith("Timeout Error:"):
                 print("LLM server error - cannot generate valid SQL")
                 return (None, None, question)
-            if self.db_path is not None:
+            if self.db_adapter.connection is not None:
                 try:
                     df = self.run_sql(sql)
                     return (sql, df, question)
@@ -142,17 +195,27 @@ class MyVanna(MilvusVectorDB, VannaBase):
             print(f"\n=== Unexpected Error ===\nError type: {type(e).__name__}\nError: {e}")
             return f"Unexpected Error: {str(e)}"
 
-    def save_training_data(self, filename="training.json"):
+    def save_training_data(self, filename=None):
         folder = "training_data"
         if not os.path.exists(folder):
             os.makedirs(folder)
+        if filename is None:
+            if self.db_name:
+                filename = f"{self.db_name}.json"
+            else:
+                filename = "default.json"
         filepath = os.path.join(folder, filename)
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(self.training_data, f, ensure_ascii=False, indent=2)
         print(f"Training data saved to {filepath}")
 
-    def load_training_data(self, filename="training.json"):
+    def load_training_data(self, filename=None):
         folder = "training_data"
+        if filename is None:
+            if self.db_name:
+                filename = f"{self.db_name}.json"
+            else:
+                filename = "default.json"
         filepath = os.path.join(folder, filename)
         if os.path.exists(filepath):
             with open(filepath, "r", encoding="utf-8") as f:

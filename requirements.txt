@@ -1,6 +1,8 @@
 vanna
 pymilvus
-sentence-transformers
 pandas
 python-dotenv
-streamlit 
+streamlit
+psycopg2-binary
+sentence-transformers
+requests 

@@ -6,6 +6,5 @@ load_dotenv()
 vn = MyVanna(config={
     "base_url": "https://vibe-agent-gateway.eternalai.org/v1",
     "api_key": os.getenv("LLM_API_KEY"),  
-    "model": "gpt-4o-mini", 
-    "db_connection": "sqlite:///db/DIEM.db"
+    "model": "gpt-4o-mini"
 })
