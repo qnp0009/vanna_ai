@@ -14,7 +14,7 @@ This project uses AI to automatically generate SQL from English questions, lever
 
 ### 1. Install dependencies
 ```bash
-pip install vanna pymilvus sentence-transformers pandas streamlit
+pip install vanna pymilvus pandas streamlit
 ```
 
 ### 2. Start Milvus

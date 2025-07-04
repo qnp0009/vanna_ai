@@ -48,7 +48,7 @@ Kết quả dữ liệu (chỉ xem trước 1000 ký tự):
             f"{llm_api_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=200
+            timeout=200 
         )
         result = response.json()
 
