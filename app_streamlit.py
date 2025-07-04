@@ -22,8 +22,9 @@ if uploaded_file:
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     try:
-        save_excel_to_db(file_path, db_path)
-        st.sidebar.success(f"✅ Successfully converted to {uploaded_file.name}.db")
+        table_name = save_excel_to_db(file_path, db_path)
+        st.sidebar.success(f"✅ Converted to {uploaded_file.name}.db with table `{table_name}`")
+        st.session_state["table_name"] = table_name
     except Exception as e:
         st.sidebar.error(f"❌ Failed to convert file: {e}")
 
@@ -49,25 +50,44 @@ question = st.text_input("💬 Your question:", placeholder="Example: Who has th
 if st.button("🚀 Ask") and question:
     with st.spinner("🤖 Processing..."):
         try:
-            sql, df, q = vn.ask(question)
+            # Inject table name hint (if exists)
+            table_hint = st.session_state.get("table_name")
+            if table_hint:
+                question_hint = f"(Assume the table is named '{table_hint}') {question}"
+            else:
+                question_hint = question
+
+            sql, df, _ = vn.ask(question_hint)
+
+            st.session_state["sql"] = sql
+            st.session_state["df"] = df
+            st.session_state["question"] = question
+
             st.code(sql, language='sql')
 
             if df is not None and not df.empty:
                 st.success("✅ Result:")
                 st.dataframe(df)
-
-                # --- Button to generate report ---
-                if st.button("📝 Generate Report"):
-                    try:
-                        report = generate_report(question, sql, df, llm_api_url=vn.base_url)
-                        st.subheader("📄 Report:")
-                        st.write(report)
-                    except Exception as e:
-                        st.error(f"❌ Failed to generate report: {e}")
             else:
                 st.warning("⚠️ No data returned.")
         except Exception as e:
             st.error(f"❌ Error processing question: {e}")
+
+# --- Generate Report (persistent after ask) ---
+if "sql" in st.session_state and "df" in st.session_state and st.session_state["df"] is not None:
+    if st.button("📝 Generate Report"):
+        with st.spinner("✍️ Generating report..."):
+            try:
+                report = generate_report(
+                    st.session_state["question"],
+                    st.session_state["sql"],
+                    st.session_state["df"],
+                    llm_api_url=vn.base_url
+                )
+                st.subheader("📄 Report:")
+                st.write(report)
+            except Exception as e:
+                st.error(f"❌ Failed to generate report: {e}")
 
 # --- Footer ---
 st.markdown("---")
