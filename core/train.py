@@ -124,6 +124,15 @@ WHERE o.tax_rate_raw BETWEEN 0.1 AND 0.15
 """
 )
 
+vn.train(
+    question="How many orders per city?",
+    sql="""
+SELECT o.city, COUNT(*) AS order_count
+FROM orders o
+GROUP BY o.city
+"""
+)
+
 # === 3. Documentation to teach AI logic and avoid ambiguity ===
 vn.train(documentation="""
 REMEMBER: WHEN YOU USE "SELECT", MUST INCLUDE "FROM TABLE_NAME"!

@@ -41,6 +41,10 @@
     "sql": "\nSELECT DISTINCT o.city, o.tax_rate_raw\nFROM orders o\nWHERE o.tax_rate_raw BETWEEN 0.1 AND 0.15\n  AND o.city IS NOT NULL;\n"
   },
   {
+    "question": "How many orders per city?",
+    "sql": "\nSELECT o.city, COUNT(*) AS order_count\nFROM orders o\nGROUP BY o.city\n"
+  },
+  {
     "documentation": "\nREMEMBER: WHEN YOU USE \"SELECT\", MUST INCLUDE \"FROM TABLE_NAME\"!\n\n-- Database stores e-commerce data with 3 main tables:\n1. orders: includes data about transactions, customers, pricing, location, and status.\n2. products: describes the product name, description, and category.\n3. categories: product categories like electronics, clothing, etc.\n\n-- SQL Best Practices:\n- ALWAYS use table names or aliases before column names: o.city, p.name\n- Use aliases for better readability: orders o, products p, categories c\n- When joining tables, always specify table names: o.product_id = p.id\n- In WHERE clauses, prefix columns with table names: o.status = 'active'\n- In GROUP BY, use table prefixes: GROUP BY o.city\n- In ORDER BY, use table prefixes: ORDER BY o.gross_amount_after_tax\n\n-- Date Handling:\n- All date columns are in TEXT format `YYYY-MM-DD HH:MM:SS`\n- Use: substr(o.date_created, 1, 10) to extract the date\n- Compare with DATE() like: DATE('now', '-6 months')\n\n-- Table Relationships:\n- orders.product_id → products.id\n- products.category_id → categories.id\n\n-- Interpretations:\n- 'Significant' = top-ranking or above average\n- 'Minor' = small (e.g. < 100 orders)\n- 'Interesting' = anomaly, unusual, or insightful pattern\n\n-- Examples:\n- SELECT o.city, COUNT(*) FROM orders o GROUP BY o.city\n- SELECT o.gross_amount_after_tax, p.name FROM orders o JOIN products p ON o.product_id = p.id\n- SELECT c.name, COUNT(*) FROM orders o JOIN products p ON o.product_id = p.id JOIN categories c ON p.category_id = c.id GROUP BY c.name\n"
   }
 ]

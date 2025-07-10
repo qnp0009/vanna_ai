@@ -16,6 +16,9 @@ from core.adapter import DBAdapter
 if 'query_history' not in st.session_state:
     st.session_state['query_history'] = []
 
+# --- Load training data (no cache) ---
+vn.load_training_data()
+
 # --- Page setup ---
 st.set_page_config(page_title="Vanna AI Report Assistant", layout="wide")
 st.title("🧠 Vanna AI - From Question to Report")
@@ -56,17 +59,11 @@ if selected_db:
         st.sidebar.markdown("🗄️ **Database Schema:**")
         
         # Cache the schema extraction to avoid repeated calls
-        @st.cache_data
-        def get_all_schema():
-            return vn.extract_all_tables_schema()
-        
-        all_schema = get_all_schema()
+        all_schema = vn.extract_all_tables_schema()
         st.sidebar.text_area("📋 All Tables Schema", all_schema, height=300, disabled=True)
 
     except Exception as e:
         st.sidebar.error(f"❌ Failed to connect to database: {e}")
-
-vn.load_training_data()
 
 # --- Sidebar: Query History ---
 if 'history' not in st.session_state:

@@ -104,7 +104,6 @@ class MyVanna(MilvusVectorDB, VannaBase):
             elif "documentation" in item:
                 training_context += f"-- Documentation:\n{item['documentation']}\n\n"
 
-        # Enhanced system message to emphasize table usage
         system_msg = """You are an expert SQL assistant that generates SQL from natural language questions. 
 
 CRITICAL RULES:
@@ -129,11 +128,19 @@ Use the database schema provided to understand table structures and relationship
 
         prompt = [
             self.system_message(system_msg),
-            self.user_message(f"Use the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}")
+            self.user_message(f"Use the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}\n\nPlease provide:\n1. The SQL query (in a code block)\n2. A brief explanation of your reasoning and how you mapped the question to the SQL (in plain text, after the code block)")
         ]
-        sql_raw = self.submit_prompt(prompt)
-        sql_clean = self.extract_sql_from_response(sql_raw)
-        return sql_clean.replace("\\_", "_")
+        response = self.submit_prompt(prompt)
+        # Extract SQL and reasoning
+        import re
+        sql_blocks = re.findall(r"```sql(.*?)```", response, re.DOTALL)
+        sql_clean = sql_blocks[0].strip() if sql_blocks else response.strip()
+        reasoning = re.sub(r"```sql.*?```", "", response, flags=re.DOTALL).strip()
+        self.last_reasoning = reasoning
+        return sql_clean
+
+    def get_last_reasoning(self):
+        return getattr(self, 'last_reasoning', None)
 
 
     def ask(self, question: str, **kwargs):

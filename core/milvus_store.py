@@ -1,155 +1,104 @@
 from vanna.base import VannaBase
+from pymilvus import connections, Collection, CollectionSchema, FieldSchema, DataType, utility
 from sentence_transformers import SentenceTransformer
 import pandas as pd
 import uuid
-import json
-import os
 
 class MilvusVectorDB(VannaBase):
-    """
-    Vector database implementation using embedded storage for Vanna AI
-    Store and search vectors for Vanna's knowledge base
-    """
     def __init__(self, config=None):
-        # Initialize embedder
         self.collection_name = "vanna_knowledge"
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")  # Embedding model
-        
-        # Use simple file-based storage instead of Milvus server
-        self.storage_file = "training_data/vector_store.json"
-        self.vectors = []
-        self._load_vectors()
+        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        host = (config or {}).get("milvus_host", "localhost")
+        port = (config or {}).get("milvus_port", "19530")
+        connections.connect(host=host, port=port)
 
-    def _load_vectors(self):
-        """Load vectors from file storage"""
-        if os.path.exists(self.storage_file):
-            try:
-                with open(self.storage_file, 'r', encoding='utf-8') as f:
-                    self.vectors = json.load(f)
-            except Exception as e:
-                print(f"Error loading vectors: {e}")
-                self.vectors = []
-
-    def _save_vectors(self):
-        """Save vectors to file storage"""
-        os.makedirs(os.path.dirname(self.storage_file), exist_ok=True)
-        try:
-            with open(self.storage_file, 'w', encoding='utf-8') as f:
-                json.dump(self.vectors, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Error saving vectors: {e}")
+        # Define schema for collection
+        fields = [
+            FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=36),
+            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=1000),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=384)
+        ]
+        schema = CollectionSchema(fields, description="Vanna knowledge base")
+        if self.collection_name not in utility.list_collections():
+            self.collection = Collection(self.collection_name, schema=schema)
+            self.collection.create_index(field_name="embedding", index_params={"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}})
+        else:
+            self.collection = Collection(self.collection_name)
+        self.collection.load()
 
     def _embed(self, text: str):
-        """Convert text to vector embedding"""
         return self.embedder.encode([text])[0].tolist()
-
-    def _cosine_similarity(self, vec1, vec2):
-        """Calculate cosine similarity between two vectors"""
-        import numpy as np
-        vec1 = np.array(vec1)
-        vec2 = np.array(vec2)
-        return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-
-    def add_ddl(self, ddl: str, **kwargs) -> str:
-        """Add DDL (Data Definition Language) to knowledge base"""
-        return self._add_entry(ddl, "ddl")
-
-    def add_documentation(self, doc: str, **kwargs) -> str:
-        """Add documentation to knowledge base"""
-        return self._add_entry(doc, "documentation")
-
-    def add_question_sql(self, question: str, sql: str, **kwargs) -> str:
-        """Add question-SQL pair to knowledge base"""
-        return self._add_entry(f"{question} => {sql}", "question_sql")
-
-    def _add_entry(self, text: str, entry_type: str = "text") -> str:
-        """Add new entry to vector database"""
-        emb = self._embed(text)  # Create embedding
-        id_str = str(uuid.uuid4())  # Create unique ID
-        
-        entry = {
-            "id": id_str,
-            "text": text,
-            "embedding": emb,
-            "type": entry_type
-        }
-        
-        self.vectors.append(entry)
-        self._save_vectors()
-        return id_str
-
-    def get_related_ddl(self, question: str, **kwargs) -> list:
-        """Find DDL related to the question"""
-        return self._search(question, "ddl")
-
-    def get_related_documentation(self, question: str, **kwargs) -> list:
-        """Find documentation related to the question"""
-        return self._search(question, "documentation")
-
-    def get_similar_question_sql(self, question: str, **kwargs) -> list:
-        """Find similar question-SQL pairs"""
-        return self._search(question, "question_sql")
-
-    def _search(self, question: str, entry_type: str | None = None) -> list:
-        """Search for vector similarity in the database"""
-        if not self.vectors:
-            return []
-            
-        emb = self._embed(question)  # Create embedding for the question
-        
-        # Calculate similarities
-        similarities = []
-        for entry in self.vectors:
-            if entry_type and entry.get("type") != entry_type:
-                continue
-            similarity = self._cosine_similarity(emb, entry["embedding"])
-            similarities.append((similarity, entry["text"]))
-        
-        # Sort by similarity and return top 3
-        similarities.sort(key=lambda x: x[0], reverse=True)
-        return [text for _, text in similarities[:3]]
 
     def generate_embedding(self, text: str) -> list:
         return self._embed(text)
 
+    def add_ddl(self, ddl: str, **kwargs) -> str:
+        return self._add_entry(ddl)
+
+    def add_documentation(self, doc: str, **kwargs) -> str:
+        return self._add_entry(doc)
+
+    def add_question_sql(self, question: str, sql: str, **kwargs) -> str:
+        return self._add_entry(f"{question} => {sql}")
+
+    def _add_entry(self, text: str) -> str:
+        emb = self._embed(text)
+        id_str = str(uuid.uuid4())
+        self.collection.insert([[id_str], [text], [emb]])
+        return id_str
+
+    def _search(self, question: str) -> list:
+        emb = self._embed(question)
+        results = self.collection.search(
+            data=[emb],
+            anns_field="embedding",
+            param={"metric_type": "L2", "params": {"nprobe": 10}},
+            limit=3,
+            output_fields=["text"]
+        )
+        # Each result in results[0] is a Hit object
+        return [hit.get("text", "") for hit in results[0]]
+
+    def get_related_ddl(self, question: str, **kwargs) -> list:
+        return self._search(question)
+
+    def get_related_documentation(self, question: str, **kwargs) -> list:
+        return self._search(question)
+
+    def get_similar_question_sql(self, question: str, **kwargs) -> list:
+        return self._search(question)
+
     def get_training_data(self) -> pd.DataFrame:
-        """Get all training data from vector database"""
         try:
-            if not self.vectors:
-                return pd.DataFrame()
-            
+            results = self.collection.query(
+                expr="id != ''",
+                output_fields=["id", "text"]
+            )
             data = []
-            for entry in self.vectors:
-                text = entry.get('text', '')
-                entry_type = entry.get('type', 'text')
-                
-                # Parse text to split question and sql if present
-                if entry_type == 'question_sql' and ' => ' in text:
+            for result in results:
+                text = result.get('text', '')
+                if ' => ' in text:
                     question, sql = text.split(' => ', 1)
                     data.append({
-                        'id': entry.get('id', ''),
+                        'id': result.get('id', ''),
                         'question': question,
                         'sql': sql,
-                        'type': entry_type
+                        'type': 'question_sql'
                     })
                 else:
                     data.append({
-                        'id': entry.get('id', ''),
+                        'id': result.get('id', ''),
                         'text': text,
-                        'type': entry_type
+                        'type': 'documentation'
                     })
-            
             return pd.DataFrame(data)
-                
         except Exception as e:
-            print(f"Error getting training data: {e}")
+            print(f"Error getting training data from Milvus: {e}")
             return pd.DataFrame()
 
     def remove_training_data(self, id: str) -> bool:
-        """Delete training data by ID"""
         try:
-            self.vectors = [entry for entry in self.vectors if entry.get('id') != id]
-            self._save_vectors()
+            self.collection.delete(f"id == '{id}'")
             return True
         except Exception as e:
             print(f"Error removing training data: {e}")
