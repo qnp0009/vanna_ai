@@ -87,8 +87,14 @@ st.sidebar.write(f"Total queries: {len(st.session_state['query_history'])}")
 
 if st.session_state['query_history']:
     for i, query_info in enumerate(st.session_state['query_history']):
-        st.sidebar.markdown(f"**Query {i+1}:** {query_info['question'][:30]}...")
-        st.sidebar.caption(f"Rows: {len(query_info['df'])} | Cols: {len(query_info['df'].columns)}")
+        col1, col2 = st.sidebar.columns([4, 1])
+        with col1:
+            st.sidebar.markdown(f"**Query {i+1}:** {query_info['question'][:30]}...")
+            st.sidebar.caption(f"Rows: {len(query_info['df'])} | Cols: {len(query_info['df'].columns)}")
+        with col2:
+            if st.sidebar.button("🗑️", key=f"delete_query_sidebar_{i}"):
+                st.session_state['query_history'].pop(i)
+                st.rerun()
 
 # --- Tabs for main content ---
 tabs = st.tabs(["💬 Q&A", "📖 User Guide", "📊 Comprehensive Report"])
@@ -314,6 +320,9 @@ with tabs[2]:
                 st.code(query_info['sql'], language='sql')
                 st.write(f"**Data:** {len(query_info['df'])} rows × {len(query_info['df'].columns)} columns")
                 st.dataframe(query_info['df'].head(5))
+                if st.button("Delete this query", key=f"delete_query_report_{i}"):
+                    st.session_state['query_history'].pop(i)
+                    st.rerun()
         
         # User request for comprehensive report
         def trigger_comprehensive_report():
