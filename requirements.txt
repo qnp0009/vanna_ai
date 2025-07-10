@@ -6,3 +6,4 @@ sentence-transformers
 numpy
 requests
 matplotlib 
+pymilvus
