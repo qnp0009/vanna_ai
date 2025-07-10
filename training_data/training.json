@@ -10,25 +10,37 @@
   },
   {
     "question": "Which city has the highest total sales in the last 6 months?",
-    "sql": "\nWITH city_stats AS (\n    SELECT city AS location,\n           'City' AS location_type,\n           COUNT(*) AS order_count,\n           SUM(gross_amount_after_tax) AS total_order_value\n    FROM orders\n    WHERE DATE(substr(date_created, 1, 10)) >= DATE('now', '-6 months')\n    AND city IS NOT NULL\n    GROUP BY city\n)\nSELECT location, order_count, total_order_value\nFROM city_stats\nORDER BY total_order_value DESC\nLIMIT 1;\n"
+    "sql": "\nWITH city_stats AS (\n    SELECT o.city AS location,\n           'City' AS location_type,\n           COUNT(*) AS order_count,\n           SUM(o.gross_amount_after_tax) AS total_order_value\n    FROM orders o\n    WHERE DATE(substr(o.date_created, 1, 10)) >= DATE('now', '-6 months')\n      AND o.city IS NOT NULL\n    GROUP BY o.city\n)\nSELECT location, order_count, total_order_value\nFROM city_stats\nORDER BY total_order_value DESC\nLIMIT 1;\n"
   },
   {
     "question": "How many orders were cancelled and what were the common reasons?",
-    "sql": "\nSELECT cancel_reason, COUNT(*) AS count\nFROM orders\nWHERE order_status = 'cancelled'\nGROUP BY cancel_reason\nORDER BY count DESC;\n"
+    "sql": "\nSELECT o.cancel_reason, COUNT(*) AS count\nFROM orders o\nWHERE o.order_status = 'cancelled'\nGROUP BY o.cancel_reason\nORDER BY count DESC;\n"
   },
   {
     "question": "What is the average gross amount per country?",
-    "sql": "\nSELECT country, AVG(gross_amount_after_tax) AS avg_order_value\nFROM orders\nWHERE country IS NOT NULL\nGROUP BY country\nORDER BY avg_order_value DESC;\n"
+    "sql": "\nSELECT o.country, AVG(o.gross_amount_after_tax) AS avg_order_value\nFROM orders o\nWHERE o.country IS NOT NULL\nGROUP BY o.country\nORDER BY avg_order_value DESC;\n"
   },
   {
     "question": "What is the most used discount code?",
-    "sql": "\nSELECT discount_code, COUNT(*) AS usage_count\nFROM orders\nWHERE discount_code IS NOT NULL\nGROUP BY discount_code\nORDER BY usage_count DESC\nLIMIT 1;\n"
+    "sql": "\nSELECT o.discount_code, COUNT(*) AS usage_count\nFROM orders o\nWHERE o.discount_code IS NOT NULL\nGROUP BY o.discount_code\nORDER BY usage_count DESC\nLIMIT 1;\n"
   },
   {
     "question": "What are the total orders per category?",
     "sql": "\nSELECT c.name AS category_name, COUNT(*) AS total_orders\nFROM orders o\nJOIN products p ON o.product_id = p.id\nJOIN categories c ON p.category_id = c.id\nGROUP BY c.name\nORDER BY total_orders DESC;\n"
   },
   {
-    "documentation": "\n-- Database stores e-commerce data with 3 main tables:\n1. orders: includes data about transactions, customers, pricing, location, and status.\n2. products: describes the product name, description, and category.\n3. categories: product categories like electronics, clothing, etc.\n\n-- Date Format Handling:\n- All date columns (e.g., date_created) are in TEXT format with `YYYY-MM-DD HH:MM:SS`.\n- When filtering by time, extract the date using `substr(date_created, 1, 10)` and compare with `DATE()`.\n\n-- Interpretation of ambiguous terms:\n- 'Significant' means a large number or value, usually defined by top-ranking or higher than average.\n- 'Minor' means small number/value, often at the bottom or under a threshold (e.g. < 100 orders).\n- 'Interesting' means unusual, surprising, or potentially insightful patterns in the data. These often require custom criteria (e.g., sudden spikes or anomalies).\n"
+    "question": "Show me all products with their categories",
+    "sql": "\nSELECT p.name AS product_name, p.description, c.name AS category_name\nFROM products p\nJOIN categories c ON p.category_id = c.id\nORDER BY c.name, p.name;\n"
+  },
+  {
+    "question": "Find orders with product details",
+    "sql": "\nSELECT o.order_id, o.gross_amount_after_tax, p.name AS product_name, c.name AS category_name\nFROM orders o\nJOIN products p ON o.product_id = p.id\nJOIN categories c ON p.category_id = c.id\nORDER BY o.gross_amount_after_tax DESC;\n"
+  },
+  {
+    "question": "List cities with tax_rate between 0.1 and 0.15",
+    "sql": "\nSELECT DISTINCT o.city, o.tax_rate_raw\nFROM orders o\nWHERE o.tax_rate_raw BETWEEN 0.1 AND 0.15\n  AND o.city IS NOT NULL;\n"
+  },
+  {
+    "documentation": "\nREMEMBER: WHEN YOU USE \"SELECT\", MUST INCLUDE \"FROM TABLE_NAME\"!\n\n-- Database stores e-commerce data with 3 main tables:\n1. orders: includes data about transactions, customers, pricing, location, and status.\n2. products: describes the product name, description, and category.\n3. categories: product categories like electronics, clothing, etc.\n\n-- SQL Best Practices:\n- ALWAYS use table names or aliases before column names: o.city, p.name\n- Use aliases for better readability: orders o, products p, categories c\n- When joining tables, always specify table names: o.product_id = p.id\n- In WHERE clauses, prefix columns with table names: o.status = 'active'\n- In GROUP BY, use table prefixes: GROUP BY o.city\n- In ORDER BY, use table prefixes: ORDER BY o.gross_amount_after_tax\n\n-- Date Handling:\n- All date columns are in TEXT format `YYYY-MM-DD HH:MM:SS`\n- Use: substr(o.date_created, 1, 10) to extract the date\n- Compare with DATE() like: DATE('now', '-6 months')\n\n-- Table Relationships:\n- orders.product_id → products.id\n- products.category_id → categories.id\n\n-- Interpretations:\n- 'Significant' = top-ranking or above average\n- 'Minor' = small (e.g. < 100 orders)\n- 'Interesting' = anomaly, unusual, or insightful pattern\n\n-- Examples:\n- SELECT o.city, COUNT(*) FROM orders o GROUP BY o.city\n- SELECT o.gross_amount_after_tax, p.name FROM orders o JOIN products p ON o.product_id = p.id\n- SELECT c.name, COUNT(*) FROM orders o JOIN products p ON o.product_id = p.id JOIN categories c ON p.category_id = c.id GROUP BY c.name\n"
   }
 ]

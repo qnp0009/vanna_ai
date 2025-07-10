@@ -12,31 +12,6 @@ from app.reveal_generator import generate_reveal_html
 from config.config import vn
 from core.adapter import DBAdapter
 
-@st.cache_resource(show_spinner=False)
-def load_training_data_cached():
-    vn.load_training_data()
-    return vn.training_data
-
-@st.cache_data(show_spinner=False)
-def generate_slides_cached(question, sql, df, base_url, api_key):
-    report = generate_report(question, sql, df, llm_api_url=base_url)
-    metadata = f"Columns: {', '.join(df.columns)}"
-    slides = ask_llm_for_slides(
-        report_text=report,
-        metadata=metadata,
-        api_key=api_key,
-        base_url=base_url
-    )
-    html_string = generate_reveal_html(
-        slides_json=slides,
-        df=df,
-        return_html=True
-    )
-    return html_string
-
-# --- Load training data (cached) ---
-load_training_data_cached()
-
 # --- Initialize session state for multiple queries ---
 if 'query_history' not in st.session_state:
     st.session_state['query_history'] = []
@@ -90,6 +65,8 @@ if selected_db:
 
     except Exception as e:
         st.sidebar.error(f"❌ Failed to connect to database: {e}")
+
+vn.load_training_data()
 
 # --- Sidebar: Query History ---
 if 'history' not in st.session_state:
