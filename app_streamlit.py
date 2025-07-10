@@ -1,16 +1,12 @@
 import os
 import streamlit as st
 import streamlit.components.v1 as components
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import io
-
 from app.report_writer import generate_report
 from app.slides_planner import ask_llm_for_slides, deduplicate_charts
 from app.reveal_generator import generate_reveal_html
 from config.config import vn
 from core.adapter import DBAdapter
+import pandas as pd
 
 # --- Initialize session state for multiple queries ---
 if 'query_history' not in st.session_state:
