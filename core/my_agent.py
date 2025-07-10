@@ -202,3 +202,17 @@ class MyVanna(MilvusVectorDB, VannaBase):
         else:
             self.training_data = []
             print(f"No training data found at {filepath}, starting fresh.")
+
+    def train(self, ddl: str | None = None, documentation: str | None = None, question: str | None = None, sql: str | None = None):
+        """Add training data to the knowledge base"""
+        if ddl:
+            self.training_data.append({"ddl": ddl})
+            print(f"✅ Added DDL training data")
+        elif documentation:
+            self.training_data.append({"documentation": documentation})
+            print(f"✅ Added documentation training data")
+        elif question and sql:
+            self.training_data.append({"question": question, "sql": sql})
+            print(f"✅ Added Q&A training data: {question[:50]}...")
+        else:
+            print("❌ Invalid training data. Must provide ddl, documentation, or both question and sql.")
