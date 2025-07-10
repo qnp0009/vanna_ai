@@ -1,5 +1,8 @@
 vanna
-pymilvus
 pandas
 python-dotenv
-streamlit 
+streamlit
+sentence-transformers
+numpy
+requests
+matplotlib 

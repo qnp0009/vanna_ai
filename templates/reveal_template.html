@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Slides</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/white.css">
+
+  <style>
+    .reveal section {
+      font-size: 1em; 
+      line-height: 1.4;
+      padding: 10px; /* reduced padding */
+    }
+
+    .reveal h2 {
+      font-size: 1.5em;
+      margin-bottom: 10px;
+    }
+
+    .reveal p {
+      font-size: 1em;
+      margin: 10px 0 20px 0;
+    }
+
+    .slide-image {
+      max-width: 90%;
+      max-height: 70vh;
+      height: auto;
+      display: block;
+      margin: 20px auto;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+    }
+
+    .fullscreen-button {
+      display: block;
+      margin: 10px auto 0;
+      padding: 6px 12px;
+      font-size: 0.9em;
+      cursor: pointer;
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="reveal">
+    <div class="slides">
+      {% for slide in slides %}
+        <section>
+          <h2>{{ slide.title }}</h2>
+
+          {% if slide.content %}
+            <p>{{ slide.content|safe }}</p>
+          {% endif %}
+
+          {% if slide.image_base64 %}
+            <img class="slide-image" src="data:image/png;base64,{{ slide.image_base64 }}">
+            <button class="fullscreen-button" onclick="this.previousElementSibling.requestFullscreen()">🔍 Fullscreen</button>
+          {% endif %}
+        </section>
+      {% endfor %}
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"></script>
+  <script>
+    Reveal.initialize({
+      // Option 1: fixed size
+      width: 1200,
+      height: 800,
+      margin: 0.1,
+      slideNumber: true,
+      transition: "fade"
+
+      // Option 2: responsive instead of fixed size
+      // responsive: true,
+    });
+  </script>
+</body>
+</html>

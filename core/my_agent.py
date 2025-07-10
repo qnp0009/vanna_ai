@@ -1,14 +1,15 @@
 import os
 import requests
-import sqlite3
 import pandas as pd
+from core.adapter import DBAdapter
 from vanna.base import VannaBase
 from core.milvus_store import MilvusVectorDB
 import json
 import re
 
 class MyVanna(MilvusVectorDB, VannaBase):
-    def __init__(self, config):
+    def __init__(self, config, db_adapter: DBAdapter | None = None):
+        self.training_data = [] 
         MilvusVectorDB.__init__(self, config=config)
         VannaBase.__init__(self)
         if config is None:
@@ -21,24 +22,16 @@ class MyVanna(MilvusVectorDB, VannaBase):
         self.base_url = config["base_url"].rstrip("/")
         self.api_key = config["api_key"]
         self.model = config["model"]
-
-        self.db_path = None
-        self.run_sql_is_set = True
-
-    def connect_to_sqlite(self, db_path):
-        """Store path to SQLite DB"""
-        self.db_path = db_path
-        print(f"✅ Connected to SQLite database: {db_path}")
+        self.db_adapter = db_adapter
 
     def run_sql(self, sql: str) -> pd.DataFrame:
         """Open a new connection per-thread to execute SQL safely"""
-        if self.db_path is None:
+        if self.db_adapter is None:
             raise ValueError("Database path not set. Call connect_to_sqlite() first.")
 
         try:
-            with sqlite3.connect(self.db_path, check_same_thread=False) as conn:
-                df = pd.read_sql_query(sql, conn)
-                return df
+            # Use the db_adapter's run_sql method instead of direct sqlite connection
+            return self.db_adapter.run_sql(sql)
         except Exception as e:
             print(f"Error executing SQL: {e}")
             return pd.DataFrame()
@@ -58,8 +51,51 @@ class MyVanna(MilvusVectorDB, VannaBase):
                 return line
         return response.strip()
 
-    def generate_sql(self, question: str, **kwargs) -> str:
-        training_context = ""
+    def extract_table_schema(self, table_name: str) -> str:
+        if not self.db_adapter or not table_name:
+            return ""
+        try:
+            df = self.db_adapter.run_sql(f"PRAGMA table_info({table_name})")
+            if df.empty:
+                return f"Table {table_name} not found."
+            schema = f"Table: {table_name}\nColumns:\n"
+            for _, row in df.iterrows():
+                schema += f"  - {row['name']}: {row['type']}\n"
+            return schema
+        except Exception as e:
+            print(f"Error extracting schema: {e}")
+            return ""
+
+    def extract_all_tables_schema(self) -> str:
+        """Extract schema for all tables in the database"""
+        if not self.db_adapter:
+            return ""
+        try:
+            # Get all table names
+            df_tables = self.db_adapter.run_sql("SELECT name FROM sqlite_master WHERE type='table'")
+            if df_tables.empty:
+                return "No tables found in database."
+            
+            all_schema = "Database Schema:\n"
+            for _, table_row in df_tables.iterrows():
+                table_name = str(table_row['name'])
+                table_schema = self.extract_table_schema(table_name)
+                if table_schema:
+                    all_schema += f"\n{table_schema}\n"
+            
+            return all_schema
+        except Exception as e:
+            print(f"Error extracting all tables schema: {e}")
+            return ""
+
+    def generate_sql(self, question: str, table_name: str | None = None, **kwargs) -> str:
+        # Get schema for all tables instead of just one table
+        print(f"🧾 Using schema for all tables in database")
+        schema = self.extract_all_tables_schema()
+        print("📄 Schema used in prompt:")
+        print(schema)
+
+        training_context = f"-- Database schema:\n{schema}\n\n"
         for item in self.training_data:
             if "question" in item and "sql" in item:
                 training_context += f"Q: {item['question']}\nA: {item['sql']}\n\n"
@@ -69,23 +105,27 @@ class MyVanna(MilvusVectorDB, VannaBase):
                 training_context += f"-- Documentation:\n{item['documentation']}\n\n"
 
         prompt = [
-            self.system_message("You are an assistant that generates SQL from natural language questions."),
+            self.system_message("You are an assistant that generates SQL from natural language questions. You can use any table in the database schema provided."),
             self.user_message(f"Use the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}")
         ]
         sql_raw = self.submit_prompt(prompt)
         sql_clean = self.extract_sql_from_response(sql_raw)
         return sql_clean.replace("\\_", "_")
 
+
     def ask(self, question: str, **kwargs):
         try:
-            sql = self.generate_sql(question)
+            table_name = kwargs.get("table_name")
+            if table_name:
+                question = f"The data is stored in a SQL table named `{table_name}`.\n{question}"
+            sql = self.generate_sql(question, table_name=table_name)
             print(f"Generated SQL: {sql}")
-            if sql.startswith("Error:") or sql.startswith("HTTP Error:") or sql.startswith("Connection Error:") or sql.startswith("Timeout Error:"):
+            if any(sql.startswith(prefix) for prefix in ["Error:", "HTTP Error:", "Connection Error:", "Timeout Error:"]):
                 print("LLM server error - cannot generate valid SQL")
                 return (None, None, question)
-            if self.db_path is not None:
+            if self.db_adapter is not None:
                 try:
-                    df = self.run_sql(sql)
+                    df = self.db_adapter.run_sql(sql)
                     return (sql, df, question)
                 except Exception as e:
                     print(f"Error executing SQL: {e}")
@@ -95,6 +135,7 @@ class MyVanna(MilvusVectorDB, VannaBase):
         except Exception as e:
             print(f"Error in ask method: {e}")
             return (None, None, question)
+
 
     def system_message(self, message: str) -> dict:
         return {"role": "system", "content": message}
@@ -121,7 +162,7 @@ class MyVanna(MilvusVectorDB, VannaBase):
                 url=f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=100
             )
             if response.status_code == 200:
                 result = response.json()
