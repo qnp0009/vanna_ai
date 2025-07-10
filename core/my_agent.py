@@ -104,8 +104,31 @@ class MyVanna(MilvusVectorDB, VannaBase):
             elif "documentation" in item:
                 training_context += f"-- Documentation:\n{item['documentation']}\n\n"
 
+        # Enhanced system message to emphasize table usage
+        system_msg = """You are an expert SQL assistant that generates SQL from natural language questions. 
+
+CRITICAL RULES:
+1. ALWAYS use table names in your SQL queries
+2. NEVER write column names without table prefixes when multiple tables are involved
+3. Use proper table aliases (e.g., o for orders, p for products)
+4. Always specify the table name before the column name: table_name.column_name
+5. Use JOINs with explicit table names and conditions
+6. When aggregating data, always specify which table the data comes from
+
+Examples of CORRECT usage:
+- SELECT orders.customer_name FROM orders WHERE orders.status = 'active'
+- SELECT o.total_amount, p.product_name FROM orders o JOIN products p ON o.product_id = p.id
+- SELECT COUNT(*) as order_count FROM orders WHERE orders.date_created >= '2024-01-01'
+
+Examples of INCORRECT usage:
+- SELECT customer_name FROM orders (missing table prefix)
+- SELECT total_amount, product_name FROM orders JOIN products (missing table aliases)
+- SELECT COUNT(*) FROM orders WHERE date_created >= '2024-01-01' (missing table prefix)
+
+Use the database schema provided to understand table structures and relationships."""
+
         prompt = [
-            self.system_message("You are an assistant that generates SQL from natural language questions. You can use any table in the database schema provided."),
+            self.system_message(system_msg),
             self.user_message(f"Use the following context to generate the SQL query:\n{training_context}\nNow answer this question:\n{question}")
         ]
         sql_raw = self.submit_prompt(prompt)
