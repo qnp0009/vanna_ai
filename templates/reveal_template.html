@@ -1,84 +1,471 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>AI Slides</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/white.css">
-
-  <style>
-    .reveal section {
-      font-size: 1em; 
-      line-height: 1.4;
-      padding: 10px; /* reduced padding */
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dynamic Business Slides with Charts</title>
+<style>
+  body, html {
+    margin: 0; 
+    padding: 0; 
+    height: 100%;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f7fa;
+    color: #222;
+    overflow: hidden;
+  }
+  
+  .slides {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  .slide {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    padding: 30px 50px;
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    z-index: 10;
+  }
+  
+  h1, h2 {
+    color: #004080;
+    margin: 0 0 15px 0;
+    font-size: 1.8rem;
+    line-height: 1.2;
+  }
+  
+  ul {
+    font-size: 0.95rem;
+    margin: 0 0 15px 0;
+    padding-left: 20px;
+    color: #444;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  
+  li {
+    margin-bottom: 6px;
+  }
+  
+  .chart-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  
+  canvas {
+    max-width: 100%;
+    max-height: 350px;
+    width: auto !important;
+    height: auto !important;
+  }
+  
+  .nav-buttons {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 20;
+  }
+  
+  button {
+    background-color: #004080;
+    border: none;
+    color: white;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    border-radius: 5px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.3s ease;
+  }
+  
+  button:disabled {
+    background-color: #a0a0a0;
+    cursor: default;
+  }
+  
+  button:hover:not(:disabled) {
+    background-color: #00264d;
+  }
+  
+  .footer {
+    position: fixed;
+    bottom: 15px;
+    left: 20px;
+    font-size: 0.9rem;
+    color: #777;
+    user-select: none;
+  }
+  
+  @media (max-width: 768px) {
+    .slide {
+      padding: 20px 25px;
     }
-
-    .reveal h2 {
-      font-size: 1.5em;
+    
+    h1, h2 {
+      font-size: 1.4rem;
       margin-bottom: 10px;
     }
-
-    .reveal p {
-      font-size: 1em;
-      margin: 10px 0 20px 0;
+    
+    ul {
+      font-size: 0.85rem;
+      margin-bottom: 10px;
     }
-
-    .slide-image {
-      max-width: 90%;
-      max-height: 70vh;
-      height: auto;
-      display: block;
-      margin: 20px auto;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+    
+    li {
+      margin-bottom: 4px;
     }
-
-    .fullscreen-button {
-      display: block;
-      margin: 10px auto 0;
-      padding: 6px 12px;
-      font-size: 0.9em;
-      cursor: pointer;
-      background: #eee;
-      border: 1px solid #ccc;
-      border-radius: 5px;
+    
+    canvas {
+      max-height: 250px;
     }
-  </style>
+    
+    .nav-buttons {
+      bottom: 15px;
+      right: 15px;
+    }
+    
+    button {
+      padding: 8px 12px;
+      font-size: 0.8rem;
+    }
+  }
+</style>
 </head>
-
 <body>
-  <div class="reveal">
-    <div class="slides">
-      {% for slide in slides %}
-        <section>
-          <h2>{{ slide.title }}</h2>
 
-          {% if slide.content %}
-            <p>{{ slide.content|safe }}</p>
-          {% endif %}
+<div class="slides" id="slidesContainer" aria-live="polite" aria-atomic="true">
+  <!-- Slides will be injected here dynamically -->
+</div>
 
-          {% if slide.image_base64 %}
-            <img class="slide-image" src="data:image/png;base64,{{ slide.image_base64 }}">
-            <button class="fullscreen-button" onclick="this.previousElementSibling.requestFullscreen()">🔍 Fullscreen</button>
-          {% endif %}
-        </section>
-      {% endfor %}
-    </div>
-  </div>
+<div class="nav-buttons" role="navigation" aria-label="Slide navigation">
+  <button id="prevBtn" aria-label="Previous slide" disabled>&larr; Prev</button>
+  <button id="nextBtn" aria-label="Next slide">Next &rarr;</button>
+  <button id="exportPdfBtn" aria-label="Export to PDF">📄 PDF</button>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"></script>
-  <script>
-    Reveal.initialize({
-      // Option 1: fixed size
-      width: 1200,
-      height: 800,
-      margin: 0.1,
-      slideNumber: true,
-      transition: "fade"
+<div class="footer" id="footer" aria-live="polite" aria-atomic="true">
+  Slide 0 / 0
+</div>
 
-      // Option 2: responsive instead of fixed size
-      // responsive: true,
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- html2pdf.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+  // Slides data from Python backend
+  const slidesData = {{ slides | tojson | safe }};
+
+  const slidesContainer = document.getElementById('slidesContainer');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const exportPdfBtn = document.getElementById('exportPdfBtn');
+  const footer = document.getElementById('footer');
+  let currentIndex = 0;
+  let chartInstances = [];
+
+  // Create slide element from slide data
+  function createSlide(slide, index) {
+    const section = document.createElement('section');
+    section.className = 'slide';
+    section.setAttribute('aria-label', `Slide ${index + 1}`);
+    if (index === 0) section.classList.add('active');
+
+    const title = document.createElement('h2');
+    title.textContent = slide.title;
+    section.appendChild(title);
+
+    if (Array.isArray(slide.content)) {
+      const ul = document.createElement('ul');
+      slide.content.forEach(point => {
+        const li = document.createElement('li');
+        li.textContent = point.replace(/^•\s*/, ''); // remove leading bullet if any
+        ul.appendChild(li);
+      });
+      section.appendChild(ul);
+    }
+
+    // If chart info exists, add canvas for chart in a container
+    if (slide.chart_column && slide.chart_value && slide.chart_type) {
+      const chartContainer = document.createElement('div');
+      chartContainer.className = 'chart-container';
+      
+      const canvas = document.createElement('canvas');
+      canvas.id = `chart-${index}`;
+      chartContainer.appendChild(canvas);
+      section.appendChild(chartContainer);
+    }
+
+    return section;
+  }
+
+  // Render all slides
+  function renderSlides() {
+    slidesContainer.innerHTML = '';
+    chartInstances.forEach(c => c.destroy());
+    chartInstances = [];
+
+    slidesData.forEach((slide, i) => {
+      const slideEl = createSlide(slide, i);
+      slidesContainer.appendChild(slideEl);
     });
-  </script>
+
+    initCharts();
+    updateNavigation();
+  }
+
+  // Initialize charts for slides with chart data
+  function initCharts() {
+    slidesData.forEach((slide, i) => {
+      if (slide.chart_column && slide.chart_value && slide.chart_type && slide.chart_data) {
+        const canvas = document.getElementById(`chart-${i}`);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+
+        let chartConfig = {
+          type: slide.chart_type,
+          data: {
+            labels: slide.chart_data.labels,
+            datasets: [{
+              label: slide.chart_data.label,
+              data: slide.chart_data.data,
+              backgroundColor: [],
+              borderColor: [],
+              borderWidth: 1,
+              fill: slide.chart_type === 'line' ? false : true,
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { 
+                display: true, 
+                labels: { 
+                  color: '#004080',
+                  font: { size: 12 }
+                } 
+              },
+              title: { display: false }
+            },
+            scales: {}
+          }
+        };
+
+        // Customize colors based on chart type
+        const colors = ['#004080', '#0073e6', '#66a3ff', '#99c2ff', '#cce0ff', '#e6f0ff'];
+        if (slide.chart_type === 'pie' || slide.chart_type === 'doughnut') {
+          chartConfig.data.datasets[0].backgroundColor = colors.slice(0, slide.chart_data.labels.length);
+        } else {
+          chartConfig.data.datasets[0].backgroundColor = colors.map(c => c + '88'); // semi-transparent
+          chartConfig.data.datasets[0].borderColor = colors;
+          chartConfig.options.scales = {
+            y: { 
+              beginAtZero: true, 
+              ticks: { 
+                color: '#004080',
+                font: { size: 11 }
+              } 
+            },
+            x: { 
+              ticks: { 
+                color: '#004080',
+                font: { size: 11 }
+              } 
+            }
+          };
+        }
+
+        // Create chart instance
+        const chart = new Chart(ctx, chartConfig);
+        chartInstances[i] = chart;
+      }
+    });
+  }
+
+  // Update slide visibility and nav buttons
+  function updateNavigation() {
+    const slides = document.querySelectorAll('.slide');
+    slides.forEach((slide, i) => {
+      slide.classList.toggle('active', i === currentIndex);
+    });
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === slidesData.length - 1;
+    footer.textContent = `Slide ${currentIndex + 1} / ${slidesData.length}`;
+  }
+
+  // Navigation handlers
+  prevBtn.addEventListener('click', () => {
+    if (currentIndex > 0) {
+      currentIndex--;
+      updateNavigation();
+    }
+  });
+  
+  nextBtn.addEventListener('click', () => {
+    if (currentIndex < slidesData.length - 1) {
+      currentIndex++;
+      updateNavigation();
+    }
+  });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' && currentIndex < slidesData.length - 1) {
+      currentIndex++;
+      updateNavigation();
+    } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      currentIndex--;
+      updateNavigation();
+    }
+  });
+
+  // Export to PDF functionality
+  exportPdfBtn.addEventListener('click', async () => {
+    try {
+      exportPdfBtn.disabled = true;
+      exportPdfBtn.textContent = '⏳ Generating...';
+      
+      // Create a temporary container for PDF
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.cssText = `
+        width: 210mm;
+        min-height: 297mm;
+        padding: 20mm;
+        background: white;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #222;
+        page-break-after: always;
+      `;
+      
+      // Add title page
+      const titlePage = document.createElement('div');
+      titlePage.innerHTML = `
+        <h1 style="color: #004080; font-size: 2.5rem; text-align: center; margin-top: 100px;">
+          Business Report
+        </h1>
+        <p style="text-align: center; font-size: 1.2rem; color: #666; margin-top: 50px;">
+          Generated by Vanna AI
+        </p>
+        <p style="text-align: center; font-size: 1rem; color: #888; margin-top: 20px;">
+          ${new Date().toLocaleDateString()}
+        </p>
+      `;
+      pdfContainer.appendChild(titlePage);
+      
+      // Add each slide as a page
+      slidesData.forEach((slide, index) => {
+        const slidePage = document.createElement('div');
+        slidePage.style.cssText = `
+          page-break-before: always;
+          padding: 20mm;
+          min-height: 257mm;
+        `;
+        
+        let slideContent = `
+          <h2 style="color: #004080; font-size: 1.8rem; margin-bottom: 20px;">
+            ${slide.title}
+          </h2>
+        `;
+        
+        if (Array.isArray(slide.content)) {
+          slideContent += '<ul style="font-size: 1rem; line-height: 1.6; color: #444;">';
+          slide.content.forEach(point => {
+            slideContent += `<li style="margin-bottom: 8px;">${point.replace(/^•\s*/, '')}</li>`;
+          });
+          slideContent += '</ul>';
+        }
+        
+        // Add chart description if chart exists
+        if (slide.chart_column && slide.chart_value && slide.chart_type) {
+          slideContent += `
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+              <h3 style="color: #004080; font-size: 1.2rem; margin-bottom: 10px;">Chart Information</h3>
+              <p style="color: #666; font-size: 0.9rem;">
+                Chart Type: ${slide.chart_type}<br>
+                Data: ${slide.chart_value} by ${slide.chart_column}<br>
+                ${slide.chart_data ? `Values: ${slide.chart_data.labels.join(', ')}` : ''}
+              </p>
+            </div>
+          `;
+        }
+        
+        slidePage.innerHTML = slideContent;
+        pdfContainer.appendChild(slidePage);
+      });
+      
+      // Configure PDF options
+      const opt = {
+        margin: 0,
+        filename: `business_report_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true
+        },
+        jsPDF: { 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'portrait' 
+        }
+      };
+      
+      // Generate PDF
+      await html2pdf().set(opt).from(pdfContainer).save();
+      
+      exportPdfBtn.textContent = '📄 PDF';
+      exportPdfBtn.disabled = false;
+      
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      exportPdfBtn.textContent = '❌ Error';
+      exportPdfBtn.disabled = false;
+      setTimeout(() => {
+        exportPdfBtn.textContent = '📄 PDF';
+      }, 2000);
+    }
+  });
+
+  // Initial render
+  renderSlides();
+
+  // Optional: Expose a function to update slidesData dynamically
+  window.updateSlides = function(newSlides) {
+    if (Array.isArray(newSlides)) {
+      slidesData.length = 0;
+      slidesData.push(...newSlides);
+      currentIndex = 0;
+      renderSlides();
+    }
+  };
+</script>
+
 </body>
 </html>

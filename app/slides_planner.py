@@ -45,18 +45,19 @@ def deduplicate_charts(slides: list[dict]) -> list[dict]:
     deduped_slides = []
 
     for slide in slides:
-        chart_key = (
+        # Convert chart key to string to make it hashable
+        chart_key = str((
             slide.get("chart_column"),
             slide.get("chart_value"),
             slide.get("chart_type")
-        )
+        ))
 
-        if all(chart_key) and chart_key in seen_charts:
+        if all([slide.get("chart_column"), slide.get("chart_value"), slide.get("chart_type")]) and chart_key in seen_charts:
             # Chart already exists → remove chart from this slide
             slide["chart_column"] = None
             slide["chart_value"] = None
             slide["chart_type"] = None
-        elif all(chart_key):
+        elif all([slide.get("chart_column"), slide.get("chart_value"), slide.get("chart_type")]):
             # First time seeing this chart → mark as used
             seen_charts.add(chart_key)
 
@@ -78,10 +79,8 @@ Given:
 - A structured **dataset overview** (columns and types):  
 {metadata}
 
-
 - A detailed **data analysis report** written in natural language:  
 {report_text}
-
 
 🎯 Your job:
 Convert the report into a sequence of high-quality presentation slides (like in PowerPoint or Reveal.js).
@@ -117,6 +116,7 @@ Return a valid JSON list:
 - Keep content max 5–6 bullet points per slide
 - If the report is long, split it into multiple coherent slides
 - Always include a **Conclusion** slide at the end with summary or takeaways
+- Use actual column names from the dataset for charts
 
 Return JSON only. Do not include explanations or markdown.
 """

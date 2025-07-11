@@ -187,13 +187,19 @@ if st.session_state.get("current_report"):
                 current_plan = st.session_state.get('current_plan', [])
                 current_report = st.session_state['current_report']
                 
-                # Create comprehensive metadata
-                columns_str = ', '.join(current_df.columns)
+                # Create comprehensive metadata with column info
+                columns_info = []
+                for col in current_df.columns:
+                    col_type = str(current_df[col].dtype)
+                    unique_count = current_df[col].nunique()
+                    columns_info.append(f"{col} ({col_type}, {unique_count} unique values)")
+                
+                columns_str = '; '.join(columns_info)
                 if current_plan:
-                    subquestions_str = ', '.join(item['subquestion'] for item in current_plan)
-                    metadata = f"Columns: {columns_str}. Subquestions: {subquestions_str}"
+                    subquestions_str = '; '.join(item['subquestion'] for item in current_plan)
+                    metadata = f"Dataset columns: {columns_str}. Analysis subquestions: {subquestions_str}"
                 else:
-                    metadata = f"Columns: {columns_str}"
+                    metadata = f"Dataset columns: {columns_str}"
                 
                 slides_progress.progress(20, text="Calling LLM for slides...")
                 
@@ -227,6 +233,15 @@ if st.session_state.get("current_report"):
                 
                 # Display slides
                 st.markdown("## 📊 Report Slides")
+                
+                # Add export buttons
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button("📄 Export PDF", help="Export slides as PDF"):
+                        st.info("💡 Use the PDF button in the slides viewer above to export the presentation.")
+                with col2:
+                    st.markdown("*The PDF export button is available in the slides viewer navigation.*")
+                
                 components.html(html_string, height=600, scrolling=False)
                 
             except Exception as e:
