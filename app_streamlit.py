@@ -163,6 +163,7 @@ Return as JSON list with "subquestion" and "sql".
     
     # Save report to session state
     st.session_state['current_report'] = report
+    progress.progress(100, text="Done!")
     
     st.markdown("## 📋 Generated Report")
     st.markdown(report)
