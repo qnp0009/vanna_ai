@@ -235,12 +235,12 @@ if st.session_state.get("current_report"):
                 st.markdown("## 📊 Report Slides")
                 
                 # Add export buttons
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    if st.button("📄 Export PDF", help="Export slides as PDF"):
-                        st.info("💡 Use the PDF button in the slides viewer above to export the presentation.")
-                with col2:
-                    st.markdown("*The PDF export button is available in the slides viewer navigation.*")
+                # col1, col2 = st.columns([1, 4])
+                # with col1:
+                #     if st.button("📄 Export PDF", help="Export slides as PDF"):
+                #         st.info("💡 Use the PDF button in the slides viewer above to export the presentation.")
+                # with col2:
+                st.markdown("*The PDF export button is available in the slides viewer navigation.*")
                 
                 components.html(html_string, height=600, scrolling=False)
                 
