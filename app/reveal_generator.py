@@ -22,6 +22,8 @@ def format_slide_content(content):
 
 
 def generate_reveal_html(slides_json, df, output_path="output/report.html", return_html=False):
+
+
     rendered_slides = []
 
     for slide in slides_json:
@@ -37,21 +39,27 @@ def generate_reveal_html(slides_json, df, output_path="output/report.html", retu
             "image_base64": None
         })
 
-        # Slide 2: chart (if needed)
-        if has_chart:
-            image_path = generate_chart_image(
-                df=df,
-                group_column=chart_column,
-                chart_type=chart_type,
-                value_column=chart_value
-            )
-            if image_path:
-                image_base64 = encode_image_to_base64(image_path)
-                rendered_slides.append({
-                    "title": f"{slide.get('title')} (Chart)",
-                    "content": "",
-                    "image_base64": image_base64
-                })
+        # Slide 2: chart (if needed and valid columns)
+        if has_chart and df is not None:
+            if chart_column in df.columns and (not chart_value or chart_value in df.columns):
+                try:
+                    image_path = generate_chart_image(
+                        df=df,
+                        group_column=chart_column,
+                        chart_type=chart_type,
+                        value_column=chart_value
+                    )
+                    if image_path:
+                        image_base64 = encode_image_to_base64(image_path)
+                        rendered_slides.append({
+                            "title": f"{slide.get('title')} (Chart)",
+                            "content": "",
+                            "image_base64": image_base64
+                        })
+                except Exception as e:
+                    print(f"[Chart Error] Could not render chart: {e}")
+            else:
+                print(f"[Warning] Skipping chart - invalid column: {chart_column} or {chart_value}")
 
     # Render HTML using Jinja2
     env = Environment(loader=FileSystemLoader("templates"))

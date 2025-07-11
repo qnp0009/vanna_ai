@@ -8,10 +8,10 @@ load_dotenv()
 
 def clean_slide_json_response(text):
     try:
-        # ✂️ Loại bỏ phần <think>...</think> nếu có
+        # Remove <think>...</think> blocks if present
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-        # 👉 Cắt từ dấu [ đầu tiên đến dấu ] cuối cùng
+        # Extract from first [ to last ]
         start_index = text.find("[")
         end_index = text.rfind("]") + 1
 
@@ -20,13 +20,13 @@ def clean_slide_json_response(text):
 
         json_text = text[start_index:end_index]
 
-        # Làm sạch
+        # Clean up
         json_text = json_text.strip("` \n")
 
         # Parse JSON
         parsed = json.loads(json_text)
 
-        # Lọc slide hợp lệ
+        # Filter valid slides
         slides = [
             s for s in parsed
             if isinstance(s, dict)
@@ -38,7 +38,6 @@ def clean_slide_json_response(text):
 
     except Exception as e:
         print("❌ Failed to clean slide JSON:", e)
-        print("🧾 Raw input:\n", text[:500])
         return []
 
 def deduplicate_charts(slides: list[dict]) -> list[dict]:
@@ -53,12 +52,12 @@ def deduplicate_charts(slides: list[dict]) -> list[dict]:
         )
 
         if all(chart_key) and chart_key in seen_charts:
-            # Biểu đồ đã xuất hiện → xóa biểu đồ khỏi slide này
+            # Chart already exists → remove chart from this slide
             slide["chart_column"] = None
             slide["chart_value"] = None
             slide["chart_type"] = None
         elif all(chart_key):
-            # Lần đầu thấy biểu đồ này → đánh dấu đã dùng
+            # First time seeing this chart → mark as used
             seen_charts.add(chart_key)
 
         deduped_slides.append(slide)
@@ -71,8 +70,7 @@ def ask_llm_for_slides(report_text, metadata, api_key=None, base_url=None):
         api_key = os.getenv("LLM_API_KEY")
     if base_url is None:
         base_url = os.getenv("LLM_API_URL", "https://vibe-agent-gateway.eternalai.org")
-    print(metadata)
-    print(report_text)
+    
     prompt = f"""
 You are a skilled data presentation assistant.
 
@@ -137,7 +135,8 @@ Return JSON only. Do not include explanations or markdown.
         response = requests.post(f"{base_url}/chat/completions", headers=headers, json=data)
         response.raise_for_status()
         raw_text = response.json()["choices"][0]["message"]["content"]
-        return clean_slide_json_response(raw_text)
+        slides = clean_slide_json_response(raw_text)
+        return slides
     except Exception as e:
         print("❌ Error calling LLM:", e)
         return []

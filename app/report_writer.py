@@ -9,12 +9,12 @@ def remove_think_blocks(text):
 
 
 def summarize_dataframe(df: pd.DataFrame) -> str:
-    """Tóm tắt sâu và có kiểm tra chất lượng cho DataFrame."""
+    """Deep summary and quality check for DataFrame."""
 
     lines = []
     lines.append(f"🔹 Dataset: {len(df)} rows × {len(df.columns)} columns")
 
-    # 1. Tổng quan các cột
+    # 1. Column overview
     lines.append("\n🔸 Column Overview:")
     for col in df.columns:
         dtype = df[col].dtype
@@ -22,7 +22,7 @@ def summarize_dataframe(df: pd.DataFrame) -> str:
         unique_count = df[col].nunique()
         lines.append(f"  - {col} ({dtype}) | nulls: {null_count}, unique: {unique_count}")
 
-    # 2. Các cột số
+    # 2. Numeric columns
     numeric_cols = df.select_dtypes(include=["number"]).columns
     if len(numeric_cols) > 0:
         lines.append("\n📊 Numeric Summary:")
@@ -45,7 +45,8 @@ def summarize_dataframe(df: pd.DataFrame) -> str:
         outliers = df[(df[col] < lower) | (df[col] > upper)]
 
         if not outliers.empty:
-            top_outlier_vals = outliers[[col]].sort_values(by=col, ascending=False)[col].head(3).round(2).tolist()
+            # Get top 3 outlier values
+            top_outlier_vals = outliers[col].nlargest(3).round(2).tolist()
 
             lines.append(
                 f"  - {col}: {len(outliers)} outliers | IQR=({q1:.2f}, {q3:.2f}) | Top values: {top_outlier_vals}"
@@ -56,7 +57,7 @@ def summarize_dataframe(df: pd.DataFrame) -> str:
             )
 
 
-    # 4. Các cột dạng object (categorical/text)
+    # 4. Object columns (categorical/text)
     object_cols = df.select_dtypes(include=["object"]).columns
     for col in object_cols:
         vc = df[col].value_counts().head(3)
@@ -64,7 +65,7 @@ def summarize_dataframe(df: pd.DataFrame) -> str:
         for val, count in vc.items():
             lines.append(f"  - {val}: {count} rows")
 
-    # 5. Ngày tháng (datetime) nếu có
+    # 5. Datetime columns if any
     datetime_cols = df.select_dtypes(include=["datetime", "datetime64[ns]"]).columns
     for col in datetime_cols:
         lines.append(f"\n🗓️ Datetime column: {col}")
@@ -74,16 +75,14 @@ def summarize_dataframe(df: pd.DataFrame) -> str:
 
 
 
-def generate_report(question: str, sql: str, data_frame: pd.DataFrame, llm_api_url: str) -> str:
+def generate_report(question: str, sql: str, data_frame: pd.DataFrame, llm_api_url: str, api_key: str | None = None) -> str:
     """
-    Sinh báo cáo từ câu hỏi người dùng, câu SQL, và DataFrame trả về từ truy vấn.
-    Bao gồm tóm tắt sâu, kiểm tra outlier, skew, nulls,... để LLM phân tích chính xác hơn.
+    Generate report from user question, SQL query, and DataFrame returned from the query.
+    Includes deep summary, outlier detection, skew analysis, nulls,... to help LLM analyze more accurately.
     """
-    # Bản tóm tắt chi tiết
+    # Detailed summary
     data_summary = summarize_dataframe(data_frame)
-    print("\n===== DEBUG: Data Summary =====\n" + data_summary + "\n==============================\n")
-
-    # Gợi ý prompt nâng cao cho LLM
+    # Advanced prompt suggestions for LLM
     content = f"""
 User Question:
 {question}
@@ -103,15 +102,18 @@ Write an analytical report that helps a data consumer understand the insight beh
 - Highlight any skewed distributions or potential outliers
 - Point out if a column has many nulls or low uniqueness
 - Use clear bullet points or short summary paragraphs
-- If there’s no significant insight, say so briefly
+- If there's no significant insight, say so briefly
 
 ✍️ Please generate a concise and data-grounded report:
 """
 
     headers = {
         "Content-Type": "application/json",
-        # "Authorization": f"Bearer {os.getenv('LLM_API_KEY')}"  # Uncomment if needed
     }
+    
+    # Add Authorization header if api_key is provided
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     payload = {
         "model": "gpt-4o-mini",
@@ -129,6 +131,15 @@ Write an analytical report that helps a data consumer understand the insight beh
             json=payload,
             timeout=200
         )
+        
+        # Check response status
+        if response.status_code != 200:
+            raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
+        
+        # Check if response has content
+        if not response.text.strip():
+            raise RuntimeError("Empty response from API")
+        
         result = response.json()
 
         if "choices" in result and result["choices"]:
