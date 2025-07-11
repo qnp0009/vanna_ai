@@ -78,14 +78,14 @@ if st.session_state.get('trigger_auto_report'):
     
 if trigger_report and user_request.strip():
     progress = st.progress(0, text="Starting Chain-of-Thought reasoning...")
-    st.info("🧠 Step 1: Thinking about the first sub-question...")
+    st.info("🧠 Step 1: Thinking about the sub-question...")
 
     conversation_steps = []
     step = 0
 
     while True:
         context = "\n".join([
-            f"Step {i+1}:\nSubquestion: {c['subquestion']}\nSQL:\n{c['sql']}\nResult Sample:\n{json.dumps(c['result'], indent=2)}"
+            f"Step {i+1}:\nSubquestion: {c['subquestion']}\nSQL:\n{c['sql']}\nResult of previous query:\n{json.dumps(c['result'], indent=2)}"
             for i, c in enumerate(conversation_steps)
         ])
 
@@ -102,7 +102,7 @@ So far, these are the steps completed:
 
 What is the next subquestion you should answer to help generate the report?
 Respond in JSON format: {{ "subquestion": "...", "sql": "..." }}
-If no more are needed, return: DONE
+If no more are needed, return: DONE, NO QUESTIONS ARE NEEDED!
 """
         response = vn.submit_prompt([
             vn.system_message("You are a careful, step-by-step business analyst."),
@@ -112,7 +112,7 @@ If no more are needed, return: DONE
         step += 1
 
         # Check if done
-        if "DONE" in response.strip().upper():
+        if "DONE, NO QUESTIONS ARE NEEDED!" in response.strip().upper():
             # Extract LLM's reasoning if available
             reasoning = None
             # Try to extract reasoning after 'DONE' or in the response
