@@ -61,10 +61,9 @@ if 'query_history' not in st.session_state:
 # --- Main Section ---
 st.markdown("---")
 st.markdown("💡 **Enter a high-level request (e.g., 'Quarter 1 2020 report') and let AI do the rest!**")
-
 def auto_generate_report():
     st.session_state['trigger_auto_report'] = True
-
+    
 user_request = st.text_area(
     "Your report request:",
     value=st.session_state.get('user_request', ''),
@@ -76,97 +75,143 @@ user_request = st.text_area(
 trigger_report = st.button("🚀 Auto Plan & Generate Report") or st.session_state.get('trigger_auto_report', False)
 if st.session_state.get('trigger_auto_report'):
     st.session_state['trigger_auto_report'] = False
-
+    
 if trigger_report and user_request.strip():
-    progress = st.progress(0, text="Planning queries...")
-    st.info("Step 1: AI is planning queries for your report...")
+    progress = st.progress(0, text="Starting Chain-of-Thought reasoning...")
+    st.info("🧠 Step 1: Thinking about the first sub-question...")
 
-    plan_prompt = f"""
-You are a data analyst assistant. Break the following user request into sub-questions and write SQL for each.
+    conversation_steps = []
+    step = 0
 
-User request: {user_request}
+    while True:
+        context = "\n".join([
+            f"Step {i+1}:\nSubquestion: {c['subquestion']}\nSQL:\n{c['sql']}\nResult Sample:\n{json.dumps(c['result'], indent=2)}"
+            for i, c in enumerate(conversation_steps)
+        ])
+
+        cot_prompt = f"""
+You are an analytical assistant. The user asked:
+
+"{user_request}"
 
 Database schema:
 {vn.extract_all_tables_schema()}
 
-Return as JSON list with "subquestion" and "sql".
+So far, these are the steps completed:
+{context if context else "None yet."}
+
+What is the next subquestion you should answer to help generate the report?
+Respond in JSON format: {{ "subquestion": "...", "sql": "..." }}
+If no more are needed, return: DONE
 """
-    plan_response = vn.submit_prompt([
-        vn.system_message("You are a careful, detail-driven data analyst."),
-        vn.user_message(plan_prompt)
-    ])
+        response = vn.submit_prompt([
+            vn.system_message("You are a careful, step-by-step business analyst."),
+            vn.user_message(cot_prompt)
+        ])
 
-    try:
-        plan = json.loads(plan_response[plan_response.find('['):plan_response.rfind(']')+1])
-    except Exception as e:
-        st.error(f"❌ Failed to parse plan: {e}")
-        st.stop()
+        step += 1
 
-    st.success("✅ Query Plan:")
-    for i, item in enumerate(plan):
-        st.markdown(f"**{i+1}. {item['subquestion']}**\n```sql\n{item['sql']}\n```")
+        # Check if done
+        if "DONE" in response.strip().upper():
+            # Extract LLM's reasoning if available
+            reasoning = None
+            # Try to extract reasoning after 'DONE' or in the response
+            if 'reason' in response.lower():
+                # Try to extract a reason field if present
+                try:
+                    resp_json = json.loads(response[response.find('{'):response.rfind('}')+1])
+                    reasoning = resp_json.get('reason')
+                except Exception:
+                    pass
+            if not reasoning:
+                # Fallback: try to extract any text after 'DONE' as reasoning
+                done_idx = response.upper().find('DONE')
+                after_done = response[done_idx+4:].strip()
+                if after_done:
+                    reasoning = after_done
+            st.info(f"✅ LLM determined that all questions are answered at step {step}.")
+            if reasoning:
+                st.markdown(f"**🤖 LLM reasoning for completion:**\n\n{reasoning}")
+            break
 
-    progress.progress(10, text="Executing SQL queries...")
-    results = []
-    all_dfs = []
-
-    for idx, item in enumerate(plan):
+        # Parse response
         try:
-            # Check if db_adapter is initialized
-            if vn.db_adapter is None:
-                st.error("❌ Database adapter not initialized. Please select a database first.")
-                st.stop()
-            
-            df = vn.db_adapter.run_sql(item['sql'])
-            df['__source__'] = item['subquestion']
-            all_dfs.append(df)
-            results.append({
-                "subquestion": item['subquestion'],
-                "sql": item['sql'],
-                "result": df.to_dict(orient='records')
-            })
+            step_data = json.loads(response[response.find('{'):response.rfind('}')+1])
+        except Exception as e:
+            st.error(f"❌ Failed to parse response at step {step}: {e}")
+            break
 
-            # Save to query history
+        # Debug: Show LLM's reasoning prompt and raw response
+        with st.expander(f"🧠 Debug: LLM Prompt & Response for Step {step}"):
+            st.markdown("**Prompt sent to LLM:**")
+            st.code(cot_prompt, language="markdown")
+            st.markdown("**Raw LLM response:**")
+            st.code(response, language="json")
+
+        st.markdown(f"### 🔍 Step {step}: {step_data['subquestion']}")
+        st.code(step_data['sql'], language="sql")
+
+        try:
+            if vn.db_adapter is None:
+                st.error("❌ Database adapter not initialized.")
+                st.stop()
+
+            df = vn.db_adapter.run_sql(step_data['sql'])
+            df['__source__'] = step_data['subquestion']
+            step_data['result'] = df.head(5).to_dict(orient='records')  # limit preview
+            step_data['full_df'] = df  # keep full data for report
+
+            # Debug: Show SQL result preview
+            with st.expander(f"🗃️ SQL Result Preview for Step {step}"):
+                st.dataframe(df.head(10))
+
+            # Save to session
+            conversation_steps.append(step_data)
             st.session_state['query_history'].append({
-                "question": item['subquestion'],
-                "sql": item['sql'],
+                "question": step_data['subquestion'],
+                "sql": step_data['sql'],
                 "df": df
             })
 
-            st.success(f"✅ Query {idx+1} executed.")
+            st.success(f"✅ Query {step} executed successfully.")
         except Exception as e:
-            st.error(f"❌ Query {idx+1} failed: {e}")
-            results.append({
-                "subquestion": item['subquestion'],
-                "sql": item['sql'],
-                "result": f"Error: {e}"
-            })
+            st.error(f"❌ Query {step} failed: {e}")
+            break
 
-        progress.progress(10 + int(60 * (idx + 1) / len(plan)), text=f"Executed {idx+1}/{len(plan)}")
+        progress.progress(min(85, int(step * 15)), text=f"Finished Step {step}")
 
+    # Combine data
+    all_dfs = [c['full_df'] for c in conversation_steps if 'full_df' in c]
     combined_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
-
     st.session_state['current_df'] = combined_df
-    st.session_state['current_plan'] = plan
-    st.session_state['current_report_data'] = results
+    st.session_state['current_plan'] = conversation_steps
+    st.session_state['current_report_data'] = conversation_steps
 
-    progress.progress(75, text="Generating report...")
-    summary = "\n".join([f"{r['subquestion']}\nSQL: {r['sql']}\nResult: {r['result']}" for r in results])
+   # Final report generation
+    progress.progress(90, text="📝 Generating report...")
+
+    combined_df = pd.concat([c['full_df'] for c in conversation_steps if 'full_df' in c], ignore_index=True) if conversation_steps else pd.DataFrame()
 
     report = generate_report(
         question=user_request,
-        sql="\n".join([item['sql'] for item in plan]),
+        sql="\n".join([c['sql'] for c in conversation_steps]),
         data_frame=combined_df,
         llm_api_url=vn.base_url,
         api_key=os.getenv("LLM_API_KEY")
     )
-    
-    # Save report to session state
+
+    report = remove_think_blocks(report)
+
+    st.session_state['current_df'] = combined_df
+    st.session_state['current_plan'] = conversation_steps
+    st.session_state['current_report_data'] = conversation_steps
     st.session_state['current_report'] = report
-    progress.progress(100, text="Done!")
-    
-    st.markdown("## 📋 Generated Report")
+
+    progress.progress(100, text="✅ Done!")
+
+    st.markdown("## 📋 Final Report")
     st.markdown(report)
+
 
 # --- Slide Generation ---
 if st.session_state.get("current_report"):

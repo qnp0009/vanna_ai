@@ -384,16 +384,7 @@
             const chartImg = canvas.toDataURL('image/png');
             slideContent += `<div style=\"margin-top:20px;text-align:center;\"><img src=\"${chartImg}\" style=\"max-width:90%;max-height:300px;\"/></div>`;
           }
-          slideContent += `
-            <div style=\"margin-top: 18px; padding: 14px; background: #f8f9fa; border-radius: 8px;\">
-              <h3 style=\"color: #004080; font-size: 1.1rem; margin-bottom: 8px;\">Chart Information</h3>
-              <p style=\"color: #666; font-size: 0.92rem;\">
-                Chart Type: ${slide.chart_type}<br>
-                Data: ${slide.chart_value} by ${slide.chart_column}<br>
-                ${slide.chart_data ? `Values: ${slide.chart_data.labels.join(', ')}` : ''}
-              </p>
-            </div>
-          `;
+          // Removed Chart Information block
         }
         slidePage.innerHTML = slideContent;
         pdfContainer.appendChild(slidePage);
