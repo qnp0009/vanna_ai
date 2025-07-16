@@ -146,7 +146,7 @@ So far, these are the subquestions completed:
 
 What is the next subquestion you should answer to help generate the report?
 Respond in JSON format: {{ "subquestion": "...", "sql": "..." }}
-If no more are needed, return: DONE
+If no more are needed, return: DONE, NO MORE QUESTIONS ARE NEEDED!
 """
         response = vn.submit_prompt([
             vn.system_message("You are a careful, step-by-step business analyst."),
@@ -156,7 +156,7 @@ If no more are needed, return: DONE
         step += 1
 
         # Check if done
-        if "DONE" in response.strip().upper():
+        if "DONE, NO MORE QUESTIONS ARE NEEDED!" in response.strip().upper():
             # Extract LLM's reasoning if available
             reasoning = None
             # Try to extract reasoning after 'DONE' or in the response
