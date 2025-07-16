@@ -26,10 +26,8 @@ class DBAdapter:
         return inspector.get_table_names()
 
     def load_dataframe(self, table_name: str) -> pd.DataFrame:
-        """
-        Đọc toàn bộ bảng thành Pandas DataFrame
-        """
-        return pd.read_sql_table(table_name, self.engine)
+        sql = f"SELECT * FROM {table_name}"
+        return pd.read_sql(sql, self.engine)
 
     def run_sql(self, sql: str) -> pd.DataFrame:
         """

@@ -6,3 +6,13 @@ sentence-transformers
 numpy
 requests
 pymilvus
+sqlalchemy
+psycopg2-binary  # PostgreSQL
+pymysql          # MySQL
+pyodbc           # SQL Server
+cx_Oracle        # Oracle
+clickhouse-sqlalchemy  # ClickHouse
+duckdb-engine    # DuckDB
+snowflake-sqlalchemy  # Snowflake
+pyhive           # PrestoDB, Hive
+pybigquery       # BigQuery

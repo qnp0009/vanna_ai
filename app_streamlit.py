@@ -20,6 +20,43 @@ st.markdown("Upload a database, select a database, ask questions, wait for sql r
 # --- Sidebar: Select database ---
 st.sidebar.header("Select Database")
 
+# --- New: Connect via Endpoint ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔗 Kết nối Database từ xa (Connection String)")
+db_endpoint = st.sidebar.text_input(
+    "Nhập Database Endpoint (Connection String):",
+    value="",
+    placeholder="Ví dụ: postgresql+psycopg2://user:pass@host:5432/dbname"
+)
+connect_btn = st.sidebar.button("Kết nối Endpoint")
+endpoint_tables = []
+if db_endpoint and connect_btn:
+    try:
+        endpoint_adapter = DBAdapter(db_endpoint)
+        endpoint_tables = endpoint_adapter.list_tables()
+        st.sidebar.success(f"✅ Kết nối thành công! Các bảng: {endpoint_tables}")
+        vn.db_adapter = endpoint_adapter
+        st.session_state['db_mode'] = 'endpoint'
+        st.session_state['endpoint_adapter'] = endpoint_adapter
+        st.session_state['endpoint_tables'] = endpoint_tables
+    except Exception as e:
+        st.sidebar.error(f"❌ Lỗi kết nối: {e}")
+
+# Nếu đã kết nối endpoint, cho phép chọn bảng và preview
+if st.session_state.get('db_mode') == 'endpoint' and st.session_state.get('endpoint_tables'):
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("🗄️ **Endpoint Tables:**")
+    selected_endpoint_table = st.sidebar.selectbox(
+        "Chọn bảng để xem preview (Endpoint)",
+        st.session_state['endpoint_tables']
+    )
+    if selected_endpoint_table:
+        try:
+            preview_df = st.session_state['endpoint_adapter'].get_table_preview(selected_endpoint_table)
+            st.sidebar.dataframe(preview_df)
+        except Exception as e:
+            st.sidebar.error(f"❌ Không thể preview bảng: {e}")
+
 # Upload DB
 st.sidebar.markdown("---")
 st.sidebar.subheader("⬆️ Upload a new database (.db)")
@@ -84,8 +121,9 @@ if trigger_report and user_request.strip():
     step = 0
 
     while True:
+        # Chỉ giữ lại các subquestion đã hỏi
         context = "\n".join([
-            f"Step {i+1}:\nSubquestion: {c['subquestion']}\nSQL:\n{c['sql']}\nResult of previous query:\n{json.dumps(c['result'], indent=2)}"
+            f"Step {i+1}: Subquestion: {c['subquestion']}"
             for i, c in enumerate(conversation_steps)
         ])
 
@@ -94,15 +132,14 @@ You are an analytical assistant. The user asked:
 
 "{user_request}"
 
-Database schema:
 {vn.extract_all_tables_schema()}
 
-So far, these are the steps completed:
+So far, these are the subquestions completed:
 {context if context else "None yet."}
 
 What is the next subquestion you should answer to help generate the report?
 Respond in JSON format: {{ "subquestion": "...", "sql": "..." }}
-If no more are needed, return: DONE, NO QUESTIONS ARE NEEDED!
+If no more are needed, return: DONE
 """
         response = vn.submit_prompt([
             vn.system_message("You are a careful, step-by-step business analyst."),
@@ -112,7 +149,7 @@ If no more are needed, return: DONE, NO QUESTIONS ARE NEEDED!
         step += 1
 
         # Check if done
-        if "DONE, NO QUESTIONS ARE NEEDED!" in response.strip().upper():
+        if "DONE" in response.strip().upper():
             # Extract LLM's reasoning if available
             reasoning = None
             # Try to extract reasoning after 'DONE' or in the response
