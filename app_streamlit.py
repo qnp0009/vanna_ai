@@ -121,9 +121,16 @@ if trigger_report and user_request.strip():
     step = 0
 
     while True:
-        # Chỉ giữ lại các subquestion đã hỏi
+        # Đưa lại subquestion và kết quả từng step vào prompt, không đưa SQL, loại bỏ '__source__' khỏi result
+        def clean_result(result):
+            if isinstance(result, list):
+                return [
+                    {k: v for k, v in row.items() if k != "__source__"}
+                    for row in result
+                ]
+            return result
         context = "\n".join([
-            f"Step {i+1}: Subquestion: {c['subquestion']}"
+            f"Step {i+1}:\nSubquestion: {c['subquestion']}\nResult: {json.dumps(clean_result(c.get('result', '')), ensure_ascii=False, indent=2)}"
             for i, c in enumerate(conversation_steps)
         ])
 
